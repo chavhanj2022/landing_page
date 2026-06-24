@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+#
+# One-shot deploy: stop & remove the old container, rebuild the image,
+# then start a fresh container.
+#
+# Usage:
+#   bin/deploy                      # HTTP only (good for testing on an IP)
+#   TLS_DOMAIN=example.com bin/deploy   # HTTPS via Thruster + Let's Encrypt
+#
+# The Rails master key is read from $RAILS_MASTER_KEY, or from
+# config/master.key if that variable is not set.
+
+set -euo pipefail
+
+APP_NAME="landing_page"
+IMAGE_NAME="landing_page"
+
+# Resolve the master key.
+if [ -z "${RAILS_MASTER_KEY:-}" ]; then
+  if [ -f config/master.key ]; then
+    RAILS_MASTER_KEY="$(cat config/master.key)"
+  else
+    echo "ERROR: RAILS_MASTER_KEY is not set and config/master.key is missing." >&2
+    exit 1
+  fi
+fi
+
+echo "==> Removing old container (if any)"
+docker rm -f "$APP_NAME" 2>/dev/null || true
+
+echo "==> Building image: $IMAGE_NAME"
+docker build -t "$IMAGE_NAME" .
+
+if [ -n "${TLS_DOMAIN:-}" ]; then
+  echo "==> Starting container with HTTPS for $TLS_DOMAIN"
+  docker run -d --name "$APP_NAME" --restart unless-stopped \
+    -p 80:80 -p 443:443 \
+    -e RAILS_MASTER_KEY="$RAILS_MASTER_KEY" \
+    -e TLS_DOMAIN="$TLS_DOMAIN" \
+    -v "${APP_NAME}_storage:/rails/storage" \
+    "$IMAGE_NAME"
+else
+  echo "==> Starting container in HTTP-only mode on port 80"
+  docker run -d --name "$APP_NAME" --restart unless-stopped \
+    -p 80:80 \
+    -e RAILS_MASTER_KEY="$RAILS_MASTER_KEY" \
+    -e RAILS_FORCE_SSL=false \
+    "$IMAGE_NAME"
+fi
+
+echo "==> Done. Container status:"
+docker ps --filter "name=$APP_NAME" --format '{{.Names}}  {{.Status}}  {{.Ports}}'
