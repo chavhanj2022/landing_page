@@ -41,13 +41,12 @@ bin/importmap audit  # JS dependency vulnerability scan
 
 ## Deployment
 
-The app ships with a production [`Dockerfile`](Dockerfile) and a [Kamal](https://kamal-deploy.org)
-config in [`config/deploy.yml`](config/deploy.yml). Update the `image`, `servers`,
-`registry`, and `proxy.host` values, set `RAILS_MASTER_KEY` in `.kamal/secrets`, then:
+The app ships with a production [`Dockerfile`](Dockerfile). Build and run it anywhere
+that hosts containers (a PaaS such as Render/Fly/Heroku, or your own Docker host):
 
 ```bash
-bin/kamal setup    # first deploy
-bin/kamal deploy   # subsequent deploys
+docker build -t landing_page .
+docker run -d -p 80:80 -e RAILS_MASTER_KEY=<config/master.key> --name landing_page landing_page
 ```
 
 The container serves traffic through [Thruster](https://github.com/basecamp/thruster)
